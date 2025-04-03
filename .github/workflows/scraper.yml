@@ -22,7 +22,7 @@ jobs:
         run: pip install requests pandas beautifulsoup4
 
       - name: Scraper ausführen
-        run: python projekte/dashboard_buergermeisterwahl/skripte/scraper.py
+        run: cd projekte/dashboard_buergermeisterwahl/skripte && python -m scraper
 
       - name: Änderungen überprüfen
         run: git status
