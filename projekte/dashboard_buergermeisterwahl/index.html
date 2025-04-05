@@ -149,7 +149,7 @@ a {
       <b>Disclaimer: </b>Die Daten auf dieser Seite werden alle 3 bis 10 Minuten automatisch aktualisiert. Es handelt sich um ein privates Projekt, das keinerlei Garantie für die Richtigkeit der dargestellten Zahlen übernimmt. Für die verlässlichen und aktuellen Ergebnisse besuchen Sie bitte direkt die offizielle Seite der Bürgermeisterwahl Brandenburg 2025. Den Link dazu finden Sie unten.
     </div>
     <div style="margin-top: 10px">
-      <b>Quelle: </b>Die Daten für diese Visualisierung stammen von den <a href="https://wahlergebnisse.brandenburg.de/730572572/1/20250406/buergermeisterwahl_gemeinde/ergebnisse.html">offiziellen Ergebnissen der Bürgermeisterwahl Brandenburg 2025 <i class="fas fa-external-link-alt"></i></a>.
+      <b>Quelle: </b>Die Daten für diese Visualisierung stammen von den <a href="https://wahlergebnisse.brandenburg.de/730572572/1/20250406/buergermeisterwahl_gemeinde/ergebnisse.html" target="_blank">offiziellen Ergebnissen der Bürgermeisterwahl Brandenburg 2025 <i class="fas fa-external-link-alt"></i></a>.
     </div>
   </div>
 
@@ -165,52 +165,61 @@ a {
     const balkendiagrammLabel = document.getElementById("balkendiagramm-label");
     const kartenansichtLabel = document.getElementById("kartenansicht-label");
 
-    // Funktion zur Aktualisierung des Labels
     function updateLabels() {
-    if (viewSwitch.checked) {
-        // Wenn "Kartenansicht" aktiviert ist
+      if (viewSwitch.checked) {
         balkendiagrammLabel.classList.remove("active");
         kartenansichtLabel.classList.add("active");
-    } else {
-        // Wenn "Balkendiagramm" aktiviert ist
+        // Kartenansicht anzeigen, Balkendiagramm ausblenden
+        d3.select("#barChartGroup").style("display", "none");
+        d3.select("#mapGroup").style("display", "block");
+        animateMap();
+      } else {
         balkendiagrammLabel.classList.add("active");
         kartenansichtLabel.classList.remove("active");
+        // Balkendiagramm anzeigen, Kartenansicht ausblenden
+        d3.select("#barChartGroup").style("display", "block");
+        d3.select("#mapGroup").style("display", "none");
+      }
     }
-    }
-
-// Event Listener für den Wechsel des Sliders
-viewSwitch.addEventListener("change", updateLabels);
-
-// Initialer Aufruf, um die Labels beim Laden der Seite richtig zu setzen
-// Standardmäßig wird der Slider auf den "Balkendiagramm"-Zustand gesetzt
-document.addEventListener("DOMContentLoaded", function() {
-  // Standardmäßig "Balkendiagramm" aktiv und "Kartenansicht" nicht aktiv
-  viewSwitch.checked = false;
-  updateLabels();
-});
+    viewSwitch.addEventListener("change", updateLabels);
+    document.addEventListener("DOMContentLoaded", function() {
+      viewSwitch.checked = false;
+      updateLabels();
+    });
 
 
     const svg = d3.select("#chart");
     const margin = { top: 50, right: 10, bottom: 50, left: 210 };
     const width = +svg.attr("width") - margin.left - margin.right;
     const height = +svg.attr("height") - margin.top - margin.bottom;
-    const chart = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+    const barChart = svg.append("g")
+      .attr("id", "barChartGroup")
+      .attr("transform", `translate(${margin.left},${margin.top})`);
+    
+    // Gruppe für Kartenansicht (initial ausgeblendet)
+    const mapGroup = svg.append("g")
+                        .attr("id", "mapGroup")
+                        .attr("transform", `translate(300,${margin.top})`)
+                        .style("display", "none");
 
     // Lade CSV-Daten
     Promise.all([
         d3.csv("daten/wahlergebnisse.csv"),
-        d3.csv("daten/kandidaten.csv")
-    ]).then(([data, data_kand]) => {
-        // Nur Einträge mit Wahlbezirk == "gesamt"
-        data = data.filter(d => d.Wahlbezirk === "gesamt");
+        d3.csv("daten/kandidaten.csv"),
+        d3.csv("daten/wahlbezirke.csv")
+    ]).then(([data, data_kand, data_wk]) => {
 
         // Daten vorbereiten: Prozentwerte als Zahl interpretieren
         data.forEach(d => {
             d.Anteil = parseFloat(d.Anteil.replace(",", "."));
         });
 
+        // Nur Einträge mit Wahlbezirk == "gesamt"
+        barData = data.filter(d => d.Wahlbezirk === "gesamt");
+        mapData = data.filter(d => d.Wahlbezirk !== "gesamt");
+
         // Sortieren nach größtem Anteil
-        data.sort((a, b) => d3.descending(a.Anteil, b.Anteil));
+        barData.sort((a, b) => d3.descending(a.Anteil, b.Anteil));
 
         // Matching-Funktion – nimmt die ersten 2 Buchstaben
         const shortKey = name => name.trim().substring(0, 2).toLowerCase();
@@ -222,7 +231,7 @@ document.addEventListener("DOMContentLoaded", function() {
 
 
         // Merge basierend auf den 2 Anfangsbuchstaben
-        data.forEach(d => {
+        barData.forEach(d => {
         const key = shortKey(d.Kandidat);
         const m = data_kand_map.get(key);
         if (m) {
@@ -236,16 +245,36 @@ document.addEventListener("DOMContentLoaded", function() {
         }
         });
 
+
+        mapData.forEach(d => {
+        const key = shortKey(d.Kandidat);
+        const m = data_kand_map.get(key);
+        if (m) {
+            d.id = m.id;
+            d.partei = m.partei;
+            d.partei_kurz = m.partei_kurz;
+            d.farbe = m.farbe;
+            d.name = m.name;
+        } else {
+            console.warn("Kein Metadatensatz für:", d.Kandidat);
+        }
+        });
+
+        // Erstelle eine Map: Schlüssel = Wahlkreis-ID (z.B. "01"), Wert = name_kurz
+        const wkMap = new Map(
+          data_wk.map(d => [d.id, { kurz: d.name_kurz, voll: d.name }])
+        );
+
       // Achsen
       const x = d3.scaleLinear().domain([0, 100]).range([0, width - 200]);
       const y = d3.scaleBand()
-        .domain(data.map(d => d.Kandidat))
+        .domain(barData.map(d => d.Kandidat))
         .range([0, height])
         .padding(0.2);
 
         // Hilfslinien bei 10%, 20%, ... 90%
         for (let i = 0; i <= 100; i += 10) {
-            chart.append("line")
+            barChart.append("line")
                 .attr("class", "grid-line")
                 .attr("x1", x(i))
                 .attr("x2", x(i))
@@ -256,7 +285,7 @@ document.addEventListener("DOMContentLoaded", function() {
                 .attr("stroke", i == 50 ? "#999" : "#ccc")
 
             // Prozentlabel
-            chart.append("text")
+            barChart.append("text")
                 .attr("x", x(i))
                 .attr("y", -5)
                 .attr("text-anchor", "middle")
@@ -266,7 +295,7 @@ document.addEventListener("DOMContentLoaded", function() {
                 .text(`${i}%`);
             
             if (i==50) {
-                chart.append("rect")
+                barChart.append("rect")
                     .attr("x", x(i) - 60)
                     .attr("y", height + 4)
                     .attr("width", 120)
@@ -275,20 +304,29 @@ document.addEventListener("DOMContentLoaded", function() {
                     .attr("rx", 3)
                     .attr("ry", 3);
                 
-                chart.append("text")
+                barChart.append("text")
                     .attr("x", x(i))
                     .attr("y", height + 18) // etwas oberhalb des 50%-Labels
                     .attr("text-anchor", "middle")
                     .style("font-size", "12px")
                     .style("fill", "#fff")
                     .text("Absolute Mehrheit");
+
+                barChart.append("text")
+                  .attr("x", x(i))
+                  .attr("y", height + 38) // etwas oberhalb des 50%-Labels
+                  .attr("text-anchor", "middle")
+                  .style("font-size", "10px")
+                  .style("font-style", "italic")
+                  .style("fill", "#999")
+                  .html("Eine absolute Mehrheit muss noch nicht den Gewinn der Wahl bedeuten (siehe <a href='https://www.politische-bildung-brandenburg.de/glossar/quorum' target='_blank' style='text-decoration: underline '>Quorum</a>)");
             }
         }
 
 
         // Balken zeichnen
-        chart.selectAll(".bar")
-            .data(data)
+        barChart.selectAll(".bar")
+            .data(barData)
             .enter()
             .append("rect")
             .attr("class", "bar")
@@ -304,8 +342,8 @@ document.addEventListener("DOMContentLoaded", function() {
 
 
         // Prozentlabel-Gruppe für Text + Hintergrund
-        const anteilLabels = chart.selectAll(".anteil-label-group")
-            .data(data)
+        const anteilLabels = barChart.selectAll(".anteil-label-group")
+            .data(barData)
             .enter()
             .append("g")
             .attr("class", "anteil-label-group")
@@ -345,8 +383,8 @@ document.addEventListener("DOMContentLoaded", function() {
 
 
       // Kandidatenbilder und Namen links vom Balken
-      chart.selectAll(".bar-label")
-        .data(data)
+      barChart.selectAll(".bar-label")
+        .data(barData)
         .enter()
         .append("foreignObject")
         .attr("x", -margin.left)
@@ -371,7 +409,235 @@ document.addEventListener("DOMContentLoaded", function() {
         .duration(1000)
         .delay((d, i) => i * 100) // kleine Staffelung
         .style("opacity", 1);
+
+
+    /////////////////////////
+    // --- Kartenansicht ---
+    /////////////////////////
+    // Definieren der Gitterparameter:
+    const cols = 6, rows = 8;
+    const tileSize = 45, gap = 8;
+    const cellSize = tileSize + gap;
+
+    // Mapping der Wahlkreise zu Gitterkoordinaten:
+    const gridMapping = [
+      { wk: "01", x: 3, y: 3 },
+      { wk: "02", x: 4, y: 3 },
+      { wk: "03", x: 3, y: 5 },
+      { wk: "04", x: 3, y: 4 },
+      { wk: "05", x: 2, y: 3 },
+      { wk: "06", x: 4, y: 2 },
+      { wk: "07", x: 5, y: 3 },
+      { wk: "08", x: 6, y: 3 },
+      { wk: "09", x: 4, y: 4 },
+      { wk: "10", x: 5, y: 4 },
+      { wk: "11", x: 4, y: 5 },
+      { wk: "12", x: 3, y: 6 },
+      { wk: "13", x: 1, y: 4 },
+      { wk: "14", x: 1, y: 3 },
+      { wk: "15", x: 2, y: 2 },
+      { wk: "16", x: 4, y: 7 },
+      { wk: "17", x: 3, y: 8 },
+      { wk: "18", x: 2, y: 8 },
+      { wk: "19", x: 2, y: 6 },
+      { wk: "20", x: 4, y: 1 },
+      { wk: "21", x: 2, y: 5 },
+      { wk: "22", x: 3, y: 2 },
+      { wk: "23", x: 5, y: 2 },
+      { wk: "24", x: 2, y: 4 },
+      { wk: "25", x: 2, y: 7 },
+      { wk: "26", x: 3, y: 7 },
+      { wk: "27", x: 6, y: 4 }
+    ];
+
+
+    // Gruppiere mapData nach Wahlbezirk:
+    const mapResultsByWk = d3.group(mapData, d => d.Wahlbezirk);
+
+    // Zeichne für jedes Mapping ein rect-Element:
+    tiles = mapGroup.selectAll("rect")
+      .data(gridMapping)
+      .enter()
+      .append("rect")
+      .attr("class", "rectMap")
+      .attr("x", d => (d.x - 1) * cellSize)
+      .attr("y", d => (d.y - 1) * cellSize)
+      .attr("rx", "5")
+      .attr("width", tileSize)
+      .attr("height", tileSize)
+      .attr("opacity", 0)
+      .style("cursor", "pointer").attr("fill", d => {
+          // Hole die Ergebnisse für diesen Wahlbezirk
+          const group = mapResultsByWk.get(d.wk);
+          if (group && group.length > 0) {
+            // Sortiere die Gruppe absteigend nach Anteil und wähle den höchsten Kandidaten:
+            const bestCandidate = group.sort((a, b) => d3.descending(a.Anteil, b.Anteil))[0];
+            // Wenn der höchste Anteil 0 ist, soll die Kachel grau bleiben:
+            return bestCandidate.Anteil === 0 ? "#ccc" : bestCandidate.farbe;
+          }
+          // Falls keine Daten vorhanden sind, default auf grau:
+          return "#ccc";
+      });
+
+      mapGroup.selectAll("text.tileLabel")
+        .data(gridMapping)
+        .enter()
+        .append("text")
+        .attr("class", "tileLabel")
+        .attr("x", d => (d.x - 1) * cellSize + tileSize / 2)
+        .attr("y", d => (d.y - 1) * cellSize + tileSize / 2 + 4)
+        .attr("text-anchor", "middle")
+        .attr("font-size", "10px")
+        .attr("font-family", "monospace")
+        .attr("opacity", 0)
+        .attr("font-style", d => {
+          // Hole die Ergebnisse für diesen Wahlbezirk
+          const group = mapResultsByWk.get(d.wk);
+          if (group) {
+            // Sortiere die Gruppe absteigend nach Anteil und wähle den höchsten Kandidaten:
+            const bestCandidate = group.sort((a, b) => d3.descending(a.Anteil, b.Anteil))[0];
+            if (bestCandidate.Anteil === 0) {return "italic";}
+            // Wenn der höchste Anteil 0 ist, soll die Kachel grau bleiben:
+            return "";
+          };
+        })
+        .attr("fill", d => {
+          // Hole die Ergebnisse für diesen Wahlbezirk
+          const group = mapResultsByWk.get(d.wk);
+          if (group) {
+            // Sortiere die Gruppe absteigend nach Anteil und wähle den höchsten Kandidaten:
+            const bestCandidate = group.sort((a, b) => d3.descending(a.Anteil, b.Anteil))[0];
+            
+            if (bestCandidate.Anteil === 0) {return "#999";}
+            // Wenn der höchste Anteil 0 ist, soll die Kachel grau bleiben:
+            return bestCandidate.id === "2" ? "#fff" : "#333";
+          };
+        })
+        .text(d => {
+          const wk = wkMap.get(d.wk);
+          return wk ? wk.kurz : "";
+        })
+        .append("title") // Tooltip!
+        .text(d => {
+          const wk = wkMap.get(d.wk);
+          return wk ? wk.voll : "";
+        });
+
     });
+
+    function animateMap() {
+      // Sortiere die Rects: Zuerst nach y, dann nach x (aufsteigend)
+      mapGroup.selectAll(".rectMap")
+        .sort((a, b) => (a.y - b.y) || (a.x - b.x))
+        // Setze sicherheitshalber nochmals den Anfangszustand
+        .transition()
+        .delay((d, i) => i * 100) // Jeder Rect erscheint 100ms nacheinander
+        .duration(500)
+        .attr("opacity", 1);
+        
+      mapGroup.selectAll(".tileLabel")
+        .sort((a, b) => (a.y - b.y) || (a.x - b.x))
+        // Setze sicherheitshalber nochmals den Anfangszustand
+        .transition()
+        .delay((d, i) => i * 100) // Jeder Rect erscheint 100ms nacheinander
+        .duration(500)
+        .attr("opacity", 1);
+
+      mapGroup.select("#legendGroup")
+        .transition()
+        .delay(1000)
+        .duration(1000)
+        .attr("opacity", 1);
+
+      mapGroup.select("#ortsteil_templin")
+        .transition()
+        .delay(1000)
+        .duration(1000)
+        .attr("opacity", 1);
+    }
+
+    /////////////
+    // Titel Karte
+    /////////////
+    const mapTitle = mapGroup.append("foreignObject")
+      .attr("id", "mapTitle")
+      .attr("y", -47)
+      .attr("x", -margin.left + 10)
+      .style("width", `${width}px`)
+      .style("height", "80px")
+        .html(`
+          <div style="display: flex; align-items: center; justify-content: center;width: ${width}px; flex-direction: column">
+            <div style="font-size: 14px; font-weight: bold; margin-bottom: 5px;">Wahlergebnis nach Wahlbezirk</div>
+            <div style="font-size: 12px;">Jede Kachel repräsentiert einen Wahlbezirk (Briefwahlbezirke wurden hierbei nicht berücksichtigt).</div>
+          </div>
+        `);
+
+    /////////////
+    // Umrandung Ortsteil Templin
+    /////////////
+    function getTileCorner(x, y) {
+      const xCoord = ((x - 1) * (45 + 8)) - 4;
+      const yCoord = ((y - 1) * (45 + 8)) - 4;
+      return [xCoord, yCoord];
+    }
+
+    const polygonTiles = [
+      {x: 4, y: 2},
+      {x: 5, y: 2},
+      {x: 5, y: 3},
+      {x: 7, y: 3},
+      {x: 7, y: 4},
+      {x: 6, y: 4},
+      {x: 6, y: 5},
+      {x: 5, y: 5},
+      {x: 5, y: 6},
+      {x: 4, y: 6},
+      {x: 4, y: 7},
+      {x: 3, y: 7},
+      {x: 3, y: 4},
+      {x: 2, y: 4},
+      {x: 2, y: 3},
+      {x: 4, y: 3},
+      {x: 4, y: 2}, // doppelt, kann weggelassen werden
+    ];
+
+    // Eckpunkte berechnen
+    const polygonPoints = polygonTiles.map(tile => getTileCorner(tile.x, tile.y));
+
+    // Letzten Punkt hinzufügen um Pfad zu schließen
+    polygonPoints.push(polygonPoints[0]);
+
+    // In ein SVG-Path-Format bringen
+    const lineGenerator = d3.line()
+      .x(d => d[0])
+      .y(d => d[1])
+      .curve(d3.curveLinear); // Keine Glättung, harte Linien
+
+    mapGroup.append("path")
+      .datum(polygonPoints)
+      .attr("id", "ortsteil_templin")
+      .attr("d", lineGenerator)
+      .attr("fill", "none")
+      .attr("stroke", "#c4a012")
+      .attr("stroke-width", 2)
+      .attr("stroke-dasharray", "4 2")
+      .attr("opacity", 0);
+
+    const legendGroup = mapGroup.append("foreignObject")
+      .attr("id", "legendGroup")
+      .attr("y", 420)
+      .style("display", "flex")
+      .style("align-items", "center")
+      .style("justify-content", "center")
+      .style("width", "400px")
+      .style("height", "40px")
+      .attr("opacity", 0)
+        .html(`
+          <div style="display: flex; align-items: center; justify-content: center;width: 300px;/*! height: 40px; */">
+            <div style="width: 18px; height: 18px; outline: 2px dashed #c4a012;margin: 8px;"></div>
+            <div style="font-size: 12px;">Ortsteil Templin</div>
+          </div>
+        `);
   </script>
 </body>
 </html>
