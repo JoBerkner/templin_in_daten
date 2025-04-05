@@ -1,50 +1,58 @@
 import requests
-import pandas as pd
 from bs4 import BeautifulSoup
+import pandas as pd
+import time  # Importiere time Modul für Pausen zwischen den Anfragen
 import os
 
-# URL der Wahlergebnisseite
-url = "https://wahlergebnisse.brandenburg.de/730572572/1/20250406/buergermeisterwahl_gemeinde/ergebnisse_gemeinde_120730572572.html"
+# Basis-URL für Wahlbezirke
+base_url = "https://wahlergebnisse.brandenburg.de/730572572/1/20250406/buergermeisterwahl_gemeinde/ergebnisse_stimmbezirk_12073057257200{0}.html"
 
-# HTTP-Anfrage senden und HTML-Inhalt abrufen
-response = requests.get(url)
-response.raise_for_status()  # Stellt sicher, dass die Anfrage erfolgreich war
+# Liste für alle Daten
+all_data = []
 
-# HTML-Inhalt mit BeautifulSoup parsen
-soup = BeautifulSoup(response.text, 'html.parser')
+# Funktion zum Abrufen der Wahlbezirksdaten
+def get_stimmbezirk_data(stimmbezirk_id):
+    is_gesamt = len(stimmbezirk_id) != 2
+    if is_gesamt:
+        url = "https://wahlergebnisse.brandenburg.de/730572572/1/20250406/buergermeisterwahl_gemeinde/ergebnisse.html"
+    else:
+        url = base_url.format(stimmbezirk_id)  # Ersetze <xx> mit der Zahl (z.B. 01, 02, ..., 27)
+    
+    response = requests.get(url)
+    soup = BeautifulSoup(response.content, 'html.parser')
+    
+    # Wähle die <tbody> Tabelle mit den Daten
+    tbody = soup.find('tbody')
+    rows = tbody.find_all('tr')
+    
+    # Daten für jeden Kandidaten extrahieren
+    data = []
+    for row in rows:
+        cols = row.find_all('td')
+        if len(cols) > 1:
+            name = row.find_all('th')[1].text.strip()  # Kandidatenname
+            stimmen = cols[1].text.strip().replace(".", "")  # Gesamtstimmen
+            anteil = cols[0].text.strip()  # Anteil in Prozent
+            data.append([name, stimmen, anteil, f"{stimmbezirk_id if not is_gesamt else "gesamt"}"])
+    
+    return data
 
-# Die Tabelle mit den Wahlergebnissen finden
-table = soup.find('table')
+# Abrufen der Daten für alle Wahlbezirke
+for stimmbezirk_id in range(1, 28):
+    formated_id = str(stimmbezirk_id).zfill(2)
+    data = get_stimmbezirk_data(formated_id)
+    all_data.extend(data)
+    
+    # Füge eine Wartezeit von 2 Sekunden zwischen den Requests ein, um eine Sperrung der IP zu vermeiden
+    time.sleep(2)  # 2 Sekunden warten
 
-# Listen zum Speichern der Daten
-kandidaten = []
-stimmen = []
-anteile = []
-
-# Sicherstellen, dass die Tabelle gefunden wurde
-if table:
-    tbody = table.find('tbody')
-    if tbody:
-        for row in tbody.find_all('tr'):
-            headers = row.find_all('th')  # Kandidatenname ist im zweiten <th>
-            cells = row.find_all('td')  # Anteil und Gesamtstimmen sind in <td>
-
-            if len(headers) > 1 and len(cells) > 1:
-                kandidat = headers[1].get_text(strip=True)  # Kandidatenname
-                anteil = cells[1].get_text(strip=True)  # Prozentualer Anteil
-                stimme = cells[0].get_text(strip=True)  # Gesamtanzahl der Stimmen
-
-                # Daten in Listen speichern
-                kandidaten.append(kandidat)
-                stimmen.append(stimme)
-                anteile.append(anteil)
+# Auch die Daten für "gesamt" hinzufügen
+gesamt_data = get_stimmbezirk_data("gesamt")
+all_data.extend(gesamt_data)
 
 # DataFrame erstellen
-df = pd.DataFrame({
-    "Kandidat": kandidaten,
-    "Gesamtstimmen": stimmen,
-    "Anteil (%)": anteile
-})
+columns = ["Kandidat", "Stimmen", "Anteil", "Wahlbezirk"]
+df = pd.DataFrame(all_data, columns=columns)
 
 # Pfad für die CSV-Datei definieren (ein Ordner über dem aktuellen Skript, in "daten/")
 output_folder = os.path.join(os.path.dirname(os.getcwd()), "daten")

@@ -1,8 +1,8 @@
 name: Bürgermeisterwahl Scraper
 
 on:
-  schedule:
-    - cron: "* * * * *"  # Läuft jede Minute
+  # schedule:
+  #   - cron: "*/5 * * * *"  # Läuft jede 5. Minute
   workflow_dispatch:  # Erlaubt manuelles Starten
 
 jobs:
@@ -33,7 +33,7 @@ jobs:
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
           git remote set-url origin https://github-actions[bot]:${{ secrets.GH_TOKEN }}@github.com/JoBerkner/templin_in_daten.git
-          
+
           git add projekte/dashboard_buergermeisterwahl/daten/wahlergebnisse.csv
           git commit -m "Automatisches Update der Wahlergebnisse" || echo "Keine Änderungen zum Committen"
           git push
