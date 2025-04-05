@@ -516,12 +516,23 @@ a {
         .text(d => {
           const wk = wkMap.get(d.wk);
           return wk ? wk.kurz : "";
-        })
-        .append("title") // Tooltip!
-        .text(d => {
-          const wk = wkMap.get(d.wk);
-          return wk ? wk.voll : "";
         });
+
+        tiles_overlay = mapGroup.selectAll(".tilesOverlay")
+          .data(gridMapping)
+          .enter()
+          .append("rect")
+          .attr("x", d => (d.x - 1) * cellSize)
+          .attr("y", d => (d.y - 1) * cellSize)
+          .attr("width", tileSize)
+          .attr("height", tileSize)
+          .attr("opacity", 0)
+          .style("cursor", "pointer")
+          .append("title") // Tooltip!
+          .text(d => {
+            const wk = wkMap.get(d.wk);
+            return wk ? wk.voll : "";
+          })
 
     });
 
