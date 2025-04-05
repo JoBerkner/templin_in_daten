@@ -26,7 +26,7 @@
         display: flex;
         justify-content: center;
         overflow-x: auto;
-        min-width:1000px;
+        min-width:930px;
         }
 
     
@@ -100,13 +100,27 @@ input:checked + .slider:before {
 .data-source-explanation {
   font-size: 11px;
   color: #777;
-  margin-top: 20px;
+  margin-top: 10px;
   padding: 10px;
   border-top: 1px solid #ccc;
 }
 
+.btn-container {
+  display:flex;
+  justify-content: center;
+}
+
 a {
   color: #c4a012
+}
+
+#footer {
+  display: flex;
+  justify-content: center;
+  margin-top: 10px;
+  border-top: 1px solid gray;
+  bottom: 0px;
+  padding: 5px;
 }
   </style>
 </head>
@@ -126,11 +140,21 @@ a {
   </div>
 
   <div class="chart-container">
-    <svg id="chart" width="1000" height="500"></svg>
+    <svg id="chart" width="930" height="500"></svg>
   </div>
+  
 
   <div class="data-source-explanation">
-    <b>Quelle: </b>Die Daten für diese Visualisierung stammen von den <a href="https://wahlergebnisse.brandenburg.de/730572572/1/20250406/buergermeisterwahl_gemeinde/ergebnisse.html">offiziellen Ergebnissen der Bürgermeisterwahl Brandenburg 2025 <i class="fas fa-external-link-alt"></i></a>
+    <div>
+      <b>Disclaimer: </b>Die Daten auf dieser Seite werden alle 3 bis 10 Minuten automatisch aktualisiert. Es handelt sich um ein privates Projekt, das keinerlei Garantie für die Richtigkeit der dargestellten Zahlen übernimmt. Für die verlässlichen und aktuellen Ergebnisse besuchen Sie bitte direkt die offizielle Seite der Bürgermeisterwahl Brandenburg 2025. Den Link dazu finden Sie unten.
+    </div>
+    <div style="margin-top: 10px">
+      <b>Quelle: </b>Die Daten für diese Visualisierung stammen von den <a href="https://wahlergebnisse.brandenburg.de/730572572/1/20250406/buergermeisterwahl_gemeinde/ergebnisse.html">offiziellen Ergebnissen der Bürgermeisterwahl Brandenburg 2025 <i class="fas fa-external-link-alt"></i></a>.
+    </div>
+  </div>
+
+  <div id="footer">
+    <script type='text/javascript' src='https://storage.ko-fi.com/cdn/widget/Widget_2.js'></script><script type='text/javascript'>kofiwidget2.init('Unterstütze mich', '#c4a012', 'C1C31CZTNM');kofiwidget2.draw();</script> 
   </div>
   
   <script>
@@ -167,7 +191,7 @@ document.addEventListener("DOMContentLoaded", function() {
 
 
     const svg = d3.select("#chart");
-    const margin = { top: 50, right: 40, bottom: 50, left: 250 };
+    const margin = { top: 50, right: 10, bottom: 50, left: 210 };
     const width = +svg.attr("width") - margin.left - margin.right;
     const height = +svg.attr("height") - margin.top - margin.bottom;
     const chart = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
