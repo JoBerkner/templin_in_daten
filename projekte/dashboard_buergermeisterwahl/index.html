@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Dashboard Bürgermeisterwahl Templin</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <style>
+    body {
+      font-family: sans-serif;
+      background-color: #fdfdd5
+    }
+    .bar-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .bar-label img {
+      width: 45px;
+      height: 45px;
+      object-fit: cover;
+      border-radius: 50%;
+    }
+    .chart-container {
+        display: flex;
+        justify-content: center;
+        overflow-x: auto;
+        min-width:1000px;
+        }
+
+    
+        #header {
+        display: flex;
+        justify-content: center;
+        flex-direction: column;
+        align-items: center;
+        }
+
+        .switch-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 1rem;
+  gap: 0.5rem;
+}
+
+.switch-label {
+  font-size: 14px;
+  color: #333;
+  opacity: 0.5
+}
+
+.switch-label.active {
+  font-weight: bold;
+  opacity: 1;
+}
+
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 50px;
+  height: 24px;
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0; left: 0;
+  right: 0; bottom: 0;
+  background-color: #999;
+  transition: .4s;
+  border-radius: 24px;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 18px; width: 18px;
+  left: 3px; bottom: 3px;
+  background-color: white;
+  transition: .4s;
+  border-radius: 50%;
+}
+
+input:checked + .slider {
+  background-color: #999;
+}
+
+input:checked + .slider:before {
+  transform: translateX(26px);
+}
+
+.data-source-explanation {
+  font-size: 11px;
+  color: #777;
+  margin-top: 20px;
+  padding: 10px;
+  border-top: 1px solid #ccc;
+}
+
+a {
+  color: #c4a012
+}
+  </style>
+</head>
+<body>
+    <div id="header">
+        <img id="wappen" src="bilder/Wappen_Templin.png" style="width: 45px">
+        <h2 style="margin-top: 10px">Bürgermeisterwahl Templin</h2>
+    </div>
+    
+  <div class="switch-wrapper">
+    <label class="switch-label" id="balkendiagramm-label">📊 Balkendiagramm</label>
+    <label class="switch">
+      <input type="checkbox" id="viewSwitch">
+      <span class="slider round"></span>
+    </label>
+    <label class="switch-label" id="kartenansicht-label">🗺️ Kartenansicht</label>
+  </div>
+
+  <div class="chart-container">
+    <svg id="chart" width="1000" height="500"></svg>
+  </div>
+
+  <div class="data-source-explanation">
+    <b>Quelle: </b>Die Daten für diese Visualisierung stammen von den <a href="https://wahlergebnisse.brandenburg.de/730572572/1/20250406/buergermeisterwahl_gemeinde/ergebnisse.html">offiziellen Ergebnissen der Bürgermeisterwahl Brandenburg 2025 <i class="fas fa-external-link-alt"></i></a>
+  </div>
+  
+  <script>
+    //////////
+    // SLIDER LOGIK
+    //////////
+    const viewSwitch = document.getElementById("viewSwitch");
+    const balkendiagrammLabel = document.getElementById("balkendiagramm-label");
+    const kartenansichtLabel = document.getElementById("kartenansicht-label");
+
+    // Funktion zur Aktualisierung des Labels
+    function updateLabels() {
+    if (viewSwitch.checked) {
+        // Wenn "Kartenansicht" aktiviert ist
+        balkendiagrammLabel.classList.remove("active");
+        kartenansichtLabel.classList.add("active");
+    } else {
+        // Wenn "Balkendiagramm" aktiviert ist
+        balkendiagrammLabel.classList.add("active");
+        kartenansichtLabel.classList.remove("active");
+    }
+    }
+
+// Event Listener für den Wechsel des Sliders
+viewSwitch.addEventListener("change", updateLabels);
+
+// Initialer Aufruf, um die Labels beim Laden der Seite richtig zu setzen
+// Standardmäßig wird der Slider auf den "Balkendiagramm"-Zustand gesetzt
+document.addEventListener("DOMContentLoaded", function() {
+  // Standardmäßig "Balkendiagramm" aktiv und "Kartenansicht" nicht aktiv
+  viewSwitch.checked = false;
+  updateLabels();
+});
+
+
+    const svg = d3.select("#chart");
+    const margin = { top: 50, right: 40, bottom: 50, left: 250 };
+    const width = +svg.attr("width") - margin.left - margin.right;
+    const height = +svg.attr("height") - margin.top - margin.bottom;
+    const chart = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+
+    // Lade CSV-Daten
+    Promise.all([
+        d3.csv("daten/wahlergebnisse.csv"),
+        d3.csv("daten/kandidaten.csv")
+    ]).then(([data, data_kand]) => {
+        // Nur Einträge mit Wahlbezirk == "gesamt"
+        data = data.filter(d => d.Wahlbezirk === "gesamt");
+
+        // Daten vorbereiten: Prozentwerte als Zahl interpretieren
+        data.forEach(d => {
+            d.Anteil = parseFloat(d.Anteil.replace(",", "."));
+        });
+
+        // Sortieren nach größtem Anteil
+        data.sort((a, b) => d3.descending(a.Anteil, b.Anteil));
+
+        // Matching-Funktion – nimmt die ersten 2 Buchstaben
+        const shortKey = name => name.trim().substring(0, 2).toLowerCase();
+
+        // Map mit Kurzschlüssel (erste 2 Buchstaben)
+        const data_kand_map = new Map(
+            data_kand.map(d => [shortKey(d.name), d])
+        );
+
+
+        // Merge basierend auf den 2 Anfangsbuchstaben
+        data.forEach(d => {
+        const key = shortKey(d.Kandidat);
+        const m = data_kand_map.get(key);
+        if (m) {
+            d.id = m.id;
+            d.partei = m.partei;
+            d.partei_kurz = m.partei_kurz;
+            d.farbe = m.farbe;
+            d.name = m.name;
+        } else {
+            console.warn("Kein Metadatensatz für:", d.Kandidat);
+        }
+        });
+
+      // Achsen
+      const x = d3.scaleLinear().domain([0, 100]).range([0, width - 200]);
+      const y = d3.scaleBand()
+        .domain(data.map(d => d.Kandidat))
+        .range([0, height])
+        .padding(0.2);
+
+        // Hilfslinien bei 10%, 20%, ... 90%
+        for (let i = 0; i <= 100; i += 10) {
+            chart.append("line")
+                .attr("class", "grid-line")
+                .attr("x1", x(i))
+                .attr("x2", x(i))
+                .attr("y1", 0)
+                .attr("y2", height)
+                .attr("stroke-dasharray", [0,50, 100].includes(i) ? "" : "2,2")
+                .attr("stroke-width", i == 50 ? 3 : 1)
+                .attr("stroke", i == 50 ? "#999" : "#ccc")
+
+            // Prozentlabel
+            chart.append("text")
+                .attr("x", x(i))
+                .attr("y", -5)
+                .attr("text-anchor", "middle")
+                .attr("fill", "#999")
+                .attr("font-size", i == 50 ? "14px" : "10px")
+                .attr("font-weight", i == 50 ? "bold" : "")
+                .text(`${i}%`);
+            
+            if (i==50) {
+                chart.append("rect")
+                    .attr("x", x(i) - 60)
+                    .attr("y", height + 4)
+                    .attr("width", 120)
+                    .attr("height", 19)
+                    .attr("fill", "#999")
+                    .attr("rx", 3)
+                    .attr("ry", 3);
+                
+                chart.append("text")
+                    .attr("x", x(i))
+                    .attr("y", height + 18) // etwas oberhalb des 50%-Labels
+                    .attr("text-anchor", "middle")
+                    .style("font-size", "12px")
+                    .style("fill", "#fff")
+                    .text("Absolute Mehrheit");
+            }
+        }
+
+
+        // Balken zeichnen
+        chart.selectAll(".bar")
+            .data(data)
+            .enter()
+            .append("rect")
+            .attr("class", "bar")
+            .attr("y", d => y(d.Kandidat))
+            .attr("height", y.bandwidth())
+            .attr("x", 0)
+            .attr("fill", d => d.farbe)
+            .attr("rx", "5px")
+            .transition()
+            .duration(1000)
+            .delay((d, i) => i * 100) // kleine Staffelung
+            .attr("width", d => x(d.Anteil)); // Zielbreite
+
+
+        // Prozentlabel-Gruppe für Text + Hintergrund
+        const anteilLabels = chart.selectAll(".anteil-label-group")
+            .data(data)
+            .enter()
+            .append("g")
+            .attr("class", "anteil-label-group")
+
+        // Rechteck-Hintergrund (vor Text)
+        anteilLabels.append("rect")
+            .attr("x", -4)
+            .attr("y", -10)
+            .attr("width", 54)
+            .attr("height", 19)
+            .attr("fill", "#fdfdd5")
+            .attr("rx", 3)
+            .attr("ry", 3)
+            .style("opacity", 0)
+            .attr("transform", d => `translate(0, ${y(d.Kandidat) + y.bandwidth() / 2})`)
+            .transition()
+            .duration(1000)
+            .delay((d, i) => i * 100) // kleine Staffelung
+            .attr("transform", d => `translate(${x(d.Anteil) + 5}, ${y(d.Kandidat) + y.bandwidth() / 2})`)
+            .style("opacity", 1);
+
+        // Prozent-Text
+        anteilLabels.append("text")
+            .text(d => `${d.Anteil.toFixed(1)} %`)
+            .attr("dy", "0.35em")
+            .attr("x", 0)
+            .style("font-size", "16px")
+            .style("font-weight", "bold")
+            .style("fill", "#333")
+            .style("opacity", 0)
+            .attr("transform", d => `translate(0, ${y(d.Kandidat) + y.bandwidth() / 2})`)
+            .transition()
+            .duration(1000)
+            .delay((d, i) => i * 100) // kleine Staffelung
+            .attr("transform", d => `translate(${x(d.Anteil) + 5}, ${y(d.Kandidat) + y.bandwidth() / 2})`)
+            .style("opacity", 1); // Zielbreite
+
+
+      // Kandidatenbilder und Namen links vom Balken
+      chart.selectAll(".bar-label")
+        .data(data)
+        .enter()
+        .append("foreignObject")
+        .attr("x", -margin.left)
+        .attr("y", d => y(d.Kandidat) + 1)
+        .attr("width", margin.left - 10)
+        .attr("height", y.bandwidth())
+        .style("opacity", 0)
+        .html(d => `
+            <div xmlns="http://www.w3.org/1999/xhtml"
+                class="bar-label"
+                style="display: flex; align-items: center; gap: 8px; justify-content: end">
+                <div style="text-align: right">
+                    <div style="font-weight: bold;font-size: 14px;">${d.Kandidat}</div>
+                    <div style="font-size: 13px;">${d.partei_kurz}</div>
+                </div>
+                <img src="bilder/kandidat_${d.id}.png"
+                    alt="${d.Kandidat}"
+                    style="width: 45px; height: 45px; object-fit: cover; border-radius: 50%; border: 3px solid ${d.farbe}; font-size: 13px;" />
+        </div>
+      `)
+        .transition()
+        .duration(1000)
+        .delay((d, i) => i * 100) // kleine Staffelung
+        .style("opacity", 1);
+    });
+  </script>
+</body>
+</html>
