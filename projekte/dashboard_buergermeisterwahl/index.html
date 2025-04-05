@@ -23,11 +23,13 @@
       border-radius: 50%;
     }
     .chart-container {
-        display: flex;
-        justify-content: center;
-        overflow-x: auto;
-        min-width:930px;
+  overflow-x: auto;
+  min-width: 930px;
+  text-align: center;
         }
+        #chart {
+  display: inline-block;
+}
 
     
         #header {
@@ -118,7 +120,7 @@ a {
   display: flex;
   justify-content: center;
   margin-top: 10px;
-  border-top: 1px solid gray;
+  /*border-top: 1px solid gray;*/
   bottom: 0px;
   padding: 5px;
 }
@@ -142,6 +144,10 @@ a {
   <div class="chart-container">
     <svg id="chart" width="930" height="500"></svg>
   </div>
+
+  <div id="footer">
+    <script type='text/javascript' src='https://storage.ko-fi.com/cdn/widget/Widget_2.js'></script><script type='text/javascript'>kofiwidget2.init('Unterstütze meine Arbeit 🤓', '#c4a012', 'C1C31CZTNM');kofiwidget2.draw();</script> 
+  </div>
   
 
   <div class="data-source-explanation">
@@ -151,10 +157,6 @@ a {
     <div style="margin-top: 10px">
       <b>Quelle: </b>Die Daten für diese Visualisierung stammen von den <a href="https://wahlergebnisse.brandenburg.de/730572572/1/20250406/buergermeisterwahl_gemeinde/ergebnisse.html" target="_blank">offiziellen Ergebnissen der Bürgermeisterwahl Brandenburg 2025 <i class="fas fa-external-link-alt"></i></a>.
     </div>
-  </div>
-
-  <div id="footer">
-    <script type='text/javascript' src='https://storage.ko-fi.com/cdn/widget/Widget_2.js'></script><script type='text/javascript'>kofiwidget2.init('Unterstütze mich', '#c4a012', 'C1C31CZTNM');kofiwidget2.draw();</script> 
   </div>
   
   <script>
@@ -197,9 +199,21 @@ a {
       .attr("transform", `translate(${margin.left},${margin.top})`);
     
     // Gruppe für Kartenansicht (initial ausgeblendet)
+    // Definieren der Gitterparameter:
+    const cols = 6, rows = 8;
+    const tileSize = 45, gap = 8;
+    const cellSize = tileSize + gap;
     const mapGroup = svg.append("g")
                         .attr("id", "mapGroup")
-                        .attr("transform", `translate(300,${margin.top})`)
+                        .attr("transform", d => {
+                          console.log(window.innerWidth)
+                          if (window.innerWidth < 930) {
+                            return `translate(${(((width - 6 * cellSize) / 2) + 100) - (930 - window.innerWidth) / 2},${margin.top})`
+                          } else {
+                            return `translate(${((width - 6 * cellSize) / 2) + 100},${margin.top})`
+                          }
+                          
+                        })
                         .style("display", "none");
 
     // Lade CSV-Daten
@@ -414,10 +428,6 @@ a {
     /////////////////////////
     // --- Kartenansicht ---
     /////////////////////////
-    // Definieren der Gitterparameter:
-    const cols = 6, rows = 8;
-    const tileSize = 45, gap = 8;
-    const cellSize = tileSize + gap;
 
     // Mapping der Wahlkreise zu Gitterkoordinaten:
     const gridMapping = [
@@ -573,13 +583,13 @@ a {
     const mapTitle = mapGroup.append("foreignObject")
       .attr("id", "mapTitle")
       .attr("y", -47)
-      .attr("x", -margin.left + 10)
+      .attr("x", -margin.left + 15)
       .style("width", `${width}px`)
       .style("height", "80px")
         .html(`
           <div style="display: flex; align-items: center; justify-content: center;width: ${width}px; flex-direction: column">
             <div style="font-size: 14px; font-weight: bold; margin-bottom: 5px;">Wahlergebnis nach Wahlbezirk</div>
-            <div style="font-size: 12px;">Jede Kachel repräsentiert einen Wahlbezirk (Briefwahlbezirke wurden hierbei nicht berücksichtigt).</div>
+            <div style="font-size: 12px;">Kacheln repräsentieren Wahlbezirke (keine Briefwahlbezirke berücksichtigt).</div>
           </div>
         `);
 
