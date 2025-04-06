@@ -22,7 +22,8 @@ def get_stimmbezirk_data(stimmbezirk_id):
         soup = BeautifulSoup(response.content, 'html.parser')
         maincontent = soup.find(id="maincontent")
         divs = maincontent.find_all("div", recursive=False) if maincontent else []
-        third_div = divs[5] if len(divs) >= 3 else None
+        third_div = divs[4] if len(divs) >= 3 else None
+        print(third_div)
     else:
         url = base_url.format(stimmbezirk_id)
 
