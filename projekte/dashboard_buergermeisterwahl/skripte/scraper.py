@@ -31,8 +31,8 @@ def get_stimmbezirk_data(stimmbezirk_id):
         cols = row.find_all('td')
         if len(cols) > 1:
             name = row.find_all('th')[1].text.strip()  # Kandidatenname
-            stimmen = cols[1].text.strip().replace(".", "")  # Gesamtstimmen
-            anteil = cols[0].text.strip()  # Anteil in Prozent
+            anteil = cols[1].text.strip().replace(".", "")  # Gesamtstimmen
+            stimmen = cols[0].text.strip()  # Anteil in Prozent
             data.append([name, stimmen, anteil, f"{stimmbezirk_id if not is_gesamt else "gesamt"}"])
     
     return data

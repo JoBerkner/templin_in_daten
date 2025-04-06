@@ -124,6 +124,41 @@ a {
   bottom: 0px;
   padding: 5px;
 }
+
+#overlay {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.5);
+  z-index: 1000;
+  align-items: center;
+  justify-content: center;
+}
+
+#overlayContent {
+  background: #fdfdd5;
+    padding: 20px;
+    border-radius: 8px;
+    max-width: 600px;
+    width: 100%;
+    height: 380px;
+    position: relative;
+}
+
+#overlayClose {
+  position: absolute;
+      top: 10px;
+      right: 10px;
+      font-size: 16px;
+      cursor: pointer;    
+      background: #c4a012;
+      color: white;
+      font-weight: 100;
+      border-color: #ccc;
+}
   </style>
 </head>
 <body>
@@ -145,6 +180,13 @@ a {
     <svg id="chart" width="930" height="500"></svg>
   </div>
 
+  <div id="overlay">
+  <div id="overlayContent">
+    <button id="overlayClose">✖</button>
+    <div id="overlayChart"></div>
+  </div>
+</div>
+
   <div id="footer">
     <script type='text/javascript' src='https://storage.ko-fi.com/cdn/widget/Widget_2.js'></script><script type='text/javascript'>kofiwidget2.init('Unterstütze meine Arbeit 🤓', '#c4a012', 'C1C31CZTNM');kofiwidget2.draw();</script> 
   </div>
@@ -155,7 +197,7 @@ a {
       <b>Disclaimer: </b>Die Daten auf dieser Seite werden alle 3 bis 10 Minuten automatisch aktualisiert. Es handelt sich um ein privates Projekt, das keinerlei Garantie für die Richtigkeit der dargestellten Zahlen übernimmt. Für die verlässlichen und aktuellen Ergebnisse besuchen Sie bitte direkt die offizielle Seite der Bürgermeisterwahl Brandenburg 2025. Den Link dazu finden Sie unten.
     </div>
     <div style="margin-top: 10px">
-      <b>Quelle: </b>Die Daten für diese Visualisierung stammen von den <a href="https://wahlergebnisse.brandenburg.de/730572572/1/20250406/buergermeisterwahl_gemeinde/ergebnisse.html" target="_blank">offiziellen Ergebnissen der Bürgermeisterwahl Brandenburg 2025 <i class="fas fa-external-link-alt"></i></a>.
+      <b>Quelle: </b>Die Daten für diese Visualisierung stammen von den <a href="https://wahlergebnisse.brandenburg.de/730572572/1/20250406/buergermeisterwahl_gemeinde/ergebnisse.html" target="_blank">offiziellen Ergebnissen der Bürgermeisterwahl Brandenburg 2025 <i class="fas fa-external-link-alt"></i></a>. click by Umut Büyükekmekci from <a href="https://thenounproject.com/browse/icons/term/click/" target="_blank" title="click Icons">Noun Project</a> (CC BY 3.0)
     </div>
   </div>
   
@@ -187,6 +229,10 @@ a {
     document.addEventListener("DOMContentLoaded", function() {
       viewSwitch.checked = false;
       updateLabels();
+    });
+
+    document.getElementById("overlayClose").addEventListener("click", () => {
+      d3.select("#overlay").style("display", "none");
     });
 
 
@@ -528,6 +574,30 @@ a {
           return wk ? wk.kurz : "";
         });
 
+        mapGroup.append("svg:image")
+          .attr('x', 4 * cellSize + tileSize / 2)
+          .attr('y', 4  * cellSize + tileSize / 2 + 4)
+          .attr('width', 40)
+          .attr('height', 44)
+          .attr('opacity', 0.7)
+          .attr("xlink:href", "bilder/click.png");
+        
+        mapGroup.append("text")
+          .attr('x', 4 * cellSize + tileSize / 2 + 25)
+          .attr('y', 5  * cellSize + tileSize / 2 + 4)
+          .attr("text-anchor", "middle")
+          .attr('fill', "#999")
+          .style('font-size', "10.5px")
+          .text("Klick auf eine Kachel, um das Ergebnis");
+        
+        mapGroup.append("text")
+          .attr('x', 4 * cellSize + tileSize / 2 + 25)
+          .attr('y', 5  * cellSize + tileSize / 2 + 18)
+          .attr("text-anchor", "middle")
+          .style('font-size', "10.5px")
+          .attr('fill', "#999")
+          .text("für den Wahlbezirk zu sehen.");
+        
         tiles_overlay = mapGroup.selectAll(".tilesOverlay")
           .data(gridMapping)
           .enter()
@@ -536,13 +606,178 @@ a {
           .attr("y", d => (d.y - 1) * cellSize)
           .attr("width", tileSize)
           .attr("height", tileSize)
-          .attr("opacity", 0)
-          .style("cursor", "pointer")
-          .append("title") // Tooltip!
-          .text(d => {
-            const wk = wkMap.get(d.wk);
-            return wk ? wk.voll : "";
-          })
+          .attr("fill","#fff")
+          .attr("opacity", 0.1)
+          .on("click", function (event, d) {
+            const wkId = d.wk;
+            const wkName = wkMap.get(wkId)?.voll || "Unbekannt";
+            
+            // Filter data for this Wahlbezirk
+            const wkResults = mapResultsByWk.get(wkId);
+
+            // Show overlay
+            d3.select("#overlay").style("display", "flex");
+
+            // Clear previous chart
+            d3.select("#overlayChart").html("");
+
+            // Create SVG in overlay
+            const svg = d3.select("#overlayChart")
+              .append("svg")
+              .attr("width", 600)
+              .attr("height", 500);
+            
+
+            svg.append("foreignObject")
+              .style("width", "100%")
+              .style("height", "50px")
+              .html(`
+                <div style="display: flex; align-items: center; justify-content: center;">
+                  <div style="font-size: 14px; font-weight: bold;">Wahlkreis ${wkId} - ${wkName}</div>
+                </div>
+              `);
+
+            const margin = { top: 60, right: 0, bottom: 60, left: 60 };
+            const width = 600 - margin.left - margin.right;
+            const height = 400 - margin.top - margin.bottom;
+
+            const chartGroup = svg.append("g")
+              .attr("transform", `translate(${margin.left},${margin.top})`);
+              console.log(wkResults.filter(d => d.id == '1'))
+
+            
+            
+            // Achsen
+            const x = d3.scaleLinear().domain([0, 100]).range([0, width - 30]);
+            const y = d3.scaleBand()
+              .domain(wkResults.map(d => d.Kandidat))
+              .range([0, height])
+              .padding(0.2);
+            
+            // Hilfslinien bei 10%, 20%, ... 90%
+        for (let i = 0; i <= 100; i += 20) {
+          chartGroup.append("line")
+                .attr("class", "wk-grid-line")
+                .attr("x1", x(i))
+                .attr("x2", x(i))
+                .attr("y1", 0)
+                .attr("y2", height)
+                .attr("stroke-dasharray", "2,2")
+                .attr("stroke-width", 1)
+                .attr("stroke", "#ccc")
+
+            // Prozentlabel
+            chartGroup.append("text")
+                .attr("x", x(i))
+                .attr("y", -5)
+                .attr("text-anchor", "middle")
+                .attr("fill", "#999")
+                .attr("font-size", "10px")
+                .text(`${i}%`);
+        }
+            
+            // Balken zeichnen
+            chartGroup.selectAll(".wk-bar")
+                .data(wkResults)
+                .enter()
+                .append("rect")
+                .attr("class", "bar")
+                .attr("y", d => y(d.Kandidat))
+                .attr("height", y.bandwidth())
+                .attr("x", 0)
+                .attr("fill", d => d.farbe)
+                .attr("rx", "5px")
+                .transition()
+                .duration(1000)
+                .delay((d, i) => i * 100) // kleine Staffelung
+                .attr("width", d => x(d.Anteil));
+            
+                if (wkResults.filter(d => d.id == '1')[0]["Anteil"] == 0) {
+              svg.append("foreignObject")
+              .style("width", "100%")
+              .style("height", "100%")
+              .html(`
+                <div style="display: flex; align-items: center; justify-content: center; width: 100%; height: ${height}px; margin-top: ${margin.top}px; background: #ccc; opacity:0.7">
+                  <div style="font-size: 14px; font-weight: bold; color: #999;">Noch keine Daten vorhanden</div>
+                </div>
+              `);
+            } else {
+
+            chartGroup.selectAll(".wk-bar-label")
+              .data(wkResults)
+              .enter()
+              .append("foreignObject")
+              .attr("x", -margin.left)
+              .attr("y", d => y(d.Kandidat) + 1)
+              .attr("width", margin.left - 10)
+              .attr("height", y.bandwidth())
+              .style("opacity", 0)
+              .html(d => `
+                  <div xmlns="http://www.w3.org/1999/xhtml"
+                      class="wk-bar-label"
+                      style="display: flex; align-items: center; gap: 8px; justify-content: end">
+                      <img src="bilder/kandidat_${d.id}.png"
+                          alt="${d.Kandidat}"
+                          style="width: 25px; height: 25px; object-fit: cover; border-radius: 50%; border: 3px solid ${d.farbe}; font-size: 13px; margin-top: 2px;" />
+              </div>
+            `)
+              .transition()
+              .duration(1000)
+              .delay((d, i) => i * 100) // kleine Staffelung
+              .style("opacity", 1);
+
+
+            // Prozentlabel-Gruppe für Text + Hintergrund
+              const anteilLabels = chartGroup.selectAll(".wk-anteil-label-group")
+                  .data(wkResults)
+                  .enter()
+                  .append("g")
+                  .attr("class", "anteil-label-group")
+
+              // Rechteck-Hintergrund (vor Text)
+              anteilLabels.append("rect")
+                  .attr("x", -4)
+                  .attr("y", -10)
+                  .attr("width", 54)
+                  .attr("height", 19)
+                  .attr("fill", "#fdfdd5")
+                  .attr("rx", 3)
+                  .attr("ry", 3)
+                  .style("opacity", 0)
+                  .attr("transform", d => `translate(0, ${y(d.Kandidat) + y.bandwidth() / 2})`)
+                  .transition()
+                  .duration(1000)
+                  .delay((d, i) => i * 100) // kleine Staffelung
+                  .attr("transform", d => `translate(${x(d.Anteil) + 5}, ${y(d.Kandidat) + y.bandwidth() / 2})`)
+                  .style("opacity", 1);
+
+              // Prozent-Text
+              anteilLabels.append("text")
+                  .text(d => `${d.Anteil.toFixed(1)} %`)
+                  .attr("dy", "0.35em")
+                  .attr("x", 0)
+                  .style("font-size", "16px")
+                  .style("font-weight", "bold")
+                  .style("fill", "#333")
+                  .style("opacity", 0)
+                  .attr("transform", d => `translate(0, ${y(d.Kandidat) + y.bandwidth() / 2})`)
+                  .transition()
+                  .duration(1000)
+                  .delay((d, i) => i * 100) // kleine Staffelung
+                  .attr("transform", d => `translate(${x(d.Anteil) + 5}, ${y(d.Kandidat) + y.bandwidth() / 2})`)
+                  .style("opacity", 1); // Zielbreite
+
+                
+              
+                }
+              })
+              .style("cursor", "pointer")
+              .append("title") // Tooltip!
+              .text(d => {
+                const wk = wkMap.get(d.wk);
+                return wk ? wk.voll : "";
+            })
+          
 
     });
 
@@ -566,13 +801,13 @@ a {
 
       mapGroup.select("#legendGroup")
         .transition()
-        .delay(1000)
+        .delay(2000)
         .duration(1000)
         .attr("opacity", 1);
 
       mapGroup.select("#ortsteil_templin")
         .transition()
-        .delay(1000)
+        .delay(2000)
         .duration(1000)
         .attr("opacity", 1);
     }
@@ -589,7 +824,7 @@ a {
         .html(`
           <div style="display: flex; align-items: center; justify-content: center;width: ${width}px; flex-direction: column">
             <div style="font-size: 14px; font-weight: bold; margin-bottom: 5px;">Wahlergebnis nach Wahlbezirk</div>
-            <div style="font-size: 12px;">Kacheln repräsentieren Wahlbezirke (keine Briefwahlbezirke berücksichtigt).</div>
+            <div style="font-size: 10.5px;">Kacheln repräsentieren Wahlbezirke (keine Briefwahlbezirke berücksichtigt).</div>
           </div>
         `);
 
@@ -638,7 +873,7 @@ a {
       .datum(polygonPoints)
       .attr("id", "ortsteil_templin")
       .attr("d", lineGenerator)
-      .attr("fill", "none")
+      .attr("fill", "#f4f0c2")
       .attr("stroke", "#c4a012")
       .attr("stroke-width", 2)
       .attr("stroke-dasharray", "4 2")
@@ -655,8 +890,8 @@ a {
       .attr("opacity", 0)
         .html(`
           <div style="display: flex; align-items: center; justify-content: center;width: 300px;/*! height: 40px; */">
-            <div style="width: 18px; height: 18px; outline: 2px dashed #c4a012;margin: 8px;"></div>
-            <div style="font-size: 12px;">Ortsteil Templin</div>
+            <div style="width: 18px; height: 18px; outline: 2px dashed #c4a012;margin: 8px; background-color: #f4f0c2"></div>
+            <div style="font-size: 12px;">Wahlbezirke Stadtgebiet Templin</div>
           </div>
         `);
   </script>
