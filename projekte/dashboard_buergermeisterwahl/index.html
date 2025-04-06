@@ -146,7 +146,6 @@ a {
     padding: 20px;
     border-radius: 8px;
     max-width: 600px;
-    width: 400px;
     height: 380px;
     position: relative;
 }
@@ -624,11 +623,15 @@ a {
             // Clear previous chart
             d3.select("#overlayChart").html("");
 
+            windowWidth = window.innerWidth > 600 ? 600 : window.innerWidth - 60
+            d3.select("#overlayContent").style("width", `${windowWidth}px`)
+            
+
             // Create SVG in overlay
             const svg = d3.select("#overlayChart")
               .append("svg")
-              .attr("width", 400)
-              .attr("height", 400);
+              .attr("width", windowWidth)
+              .attr("height", 450);
             
 
             svg.append("foreignObject")
@@ -641,8 +644,8 @@ a {
               `);
 
             const margin = { top: 60, right: 0, bottom: 60, left: 60 };
-            const width = 400 - margin.left - margin.right;
-            const height = 400 - margin.top - margin.bottom;
+            const width = windowWidth - margin.left - margin.right;
+            const height = 450 - margin.top - margin.bottom - 40;
 
             const chartGroup = svg.append("g")
               .attr("transform", `translate(${margin.left},${margin.top})`);
