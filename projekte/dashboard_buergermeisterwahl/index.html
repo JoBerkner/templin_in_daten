@@ -3,6 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
   <title>Dashboard Bürgermeisterwahl Templin</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
   <script src="https://d3js.org/d3.v7.min.js"></script>
@@ -143,7 +146,7 @@ a {
     padding: 20px;
     border-radius: 8px;
     max-width: 600px;
-    width: 100%;
+    width: 400px;
     height: 380px;
     position: relative;
 }
@@ -624,8 +627,8 @@ a {
             // Create SVG in overlay
             const svg = d3.select("#overlayChart")
               .append("svg")
-              .attr("width", 600)
-              .attr("height", 500);
+              .attr("width", 400)
+              .attr("height", 400);
             
 
             svg.append("foreignObject")
@@ -638,7 +641,7 @@ a {
               `);
 
             const margin = { top: 60, right: 0, bottom: 60, left: 60 };
-            const width = 600 - margin.left - margin.right;
+            const width = 400 - margin.left - margin.right;
             const height = 400 - margin.top - margin.bottom;
 
             const chartGroup = svg.append("g")
