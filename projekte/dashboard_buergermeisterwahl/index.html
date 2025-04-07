@@ -9,6 +9,8 @@
   <title>Dashboard Bürgermeisterwahl Templin</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
   <script src="https://d3js.org/d3.v7.min.js"></script>
+  <script src="https://unpkg.com/clipper-lib@6.4.2/clipper.js"></script>
+
   <style>
     body {
       font-family: sans-serif;
@@ -178,6 +180,15 @@ a {
     <label class="switch-label" id="kartenansicht-label">🗺️ Kartenansicht</label>
   </div>
 
+  <div id="mapSwitch" class="switch-wrapper" style="display: none;">
+    <label class="switch-label" id="wahlbezirk-label">🗳️ Nach Wahlbezirke</label>
+    <label class="switch">
+      <input type="checkbox" id="viewSwitchMap">
+      <span class="slider round"></span>
+    </label>
+    <label class="switch-label" id="briefwahlbezirk-label">✉️ Nach Briefwahlbezirke</label>
+  </div>
+
   <div class="chart-container">
     <svg id="chart" width="930" height="500"></svg>
   </div>
@@ -208,16 +219,20 @@ a {
     // SLIDER LOGIK
     //////////
     const viewSwitch = document.getElementById("viewSwitch");
+    const viewSwitchMap = document.getElementById("viewSwitchMap");
     const balkendiagrammLabel = document.getElementById("balkendiagramm-label");
     const kartenansichtLabel = document.getElementById("kartenansicht-label");
+    const wahlbezirkabel = document.getElementById("wahlbezirk-label");
+    const briefwahlbezirkLabel = document.getElementById("briefwahlbezirk-label");
 
-    function updateLabels() {
+    function updateLabelsChart() {
       if (viewSwitch.checked) {
         balkendiagrammLabel.classList.remove("active");
         kartenansichtLabel.classList.add("active");
         // Kartenansicht anzeigen, Balkendiagramm ausblenden
         d3.select("#barChartGroup").style("display", "none");
         d3.select("#mapGroup").style("display", "block");
+        d3.select("#mapSwitch").style("display", "flex");
         animateMap();
       } else {
         balkendiagrammLabel.classList.add("active");
@@ -225,13 +240,38 @@ a {
         // Balkendiagramm anzeigen, Kartenansicht ausblenden
         d3.select("#barChartGroup").style("display", "block");
         d3.select("#mapGroup").style("display", "none");
+        d3.select("#mapSwitch").style("display", "none");
       }
     }
-    viewSwitch.addEventListener("change", updateLabels);
+    viewSwitch.addEventListener("change", updateLabelsChart);
     document.addEventListener("DOMContentLoaded", function() {
       viewSwitch.checked = false;
-      updateLabels();
+      updateLabelsChart();
     });
+
+    function updateLabelsMap() {
+      if (viewSwitchMap.checked) {
+        wahlbezirkabel.classList.remove("active");
+        briefwahlbezirkLabel.classList.add("active");
+        // Kartenansicht anzeigen, Balkendiagramm ausblenden
+        d3.select("#mapGroupWahlkreis").style("display", "none");
+        d3.select("#mapGroupBriefwahlkreis").style("display", "block");
+        animateMap();
+      } else {
+        wahlbezirkabel.classList.add("active");
+        briefwahlbezirkLabel.classList.remove("active");
+        // Balkendiagramm anzeigen, Kartenansicht ausblenden
+        d3.select("#mapGroupWahlkreis").style("display", "block");
+        d3.select("#mapGroupBriefwahlkreis").style("display", "none");
+      }
+    }
+    viewSwitchMap.addEventListener("change", updateLabelsMap);
+    document.addEventListener("DOMContentLoaded", function() {
+      viewSwitchMap.checked = false;
+      updateLabelsMap();
+    });
+
+
 
     document.getElementById("overlayClose").addEventListener("click", () => {
       d3.select("#overlay").style("display", "none");
@@ -263,6 +303,14 @@ a {
                           
                         })
                         .style("display", "none");
+    
+    const mapGroupWahlkreis = mapGroup.append("g")
+      .attr("id", "mapGroupWahlkreis");
+
+    
+    const mapGroupBriefwahlkreis = mapGroup.append("g")
+      .attr("id", "mapGroupBriefwahlkreis")
+      .style("display", "none");
 
     // Lade CSV-Daten
     Promise.all([
@@ -278,10 +326,9 @@ a {
 
         // Nur Einträge mit Wahlbezirk == "gesamt"
         barData = data.filter(d => d.Wahlbezirk === "gesamt");
-        mapData = data.filter(d => d.Wahlbezirk !== "gesamt");
+        mapDataWK = data.filter(d => d.Wahlbezirk !== "gesamt" && d.Wahlbezirk != "0" && d.Wahlbezirk != "1" && d.Wahlbezirk != "2" && d.Wahlbezirk != "3");
+        mapDataBWK = data.filter(d => d.Wahlbezirk !== "gesamt");
 
-        // Sortieren nach größtem Anteil
-        barData.sort((a, b) => d3.descending(a.Anteil, b.Anteil));
 
         // Matching-Funktion – nimmt die ersten 2 Buchstaben
         const shortKey = name => name.trim().substring(0, 2).toLowerCase();
@@ -290,6 +337,54 @@ a {
         const data_kand_map = new Map(
             data_kand.map(d => [shortKey(d.name), d])
         );
+
+
+  const idToBwk = new Map(data_wk.map(d => [d.id, d.bwk]));
+
+  mapDataBWK.forEach(d => {
+    d.Stimmen = +d.Stimmen;
+    d.bwk = idToBwk.get(d.Wahlbezirk) || "Unknown";
+  });
+
+  // Group the results by the bwk field.
+  const groupedByBwk = d3.group(mapDataBWK, d => d.bwk);
+
+  
+// Create the sharesByBwk Map as an array of candidate objects per bwk
+const sharesByBwk = new Map();
+groupedByBwk.forEach((group, bwk) => {
+  // Roll up votes per candidate in this group.
+  const candidateMap = new Map();
+  group.forEach(d => {
+    const candidate = d.Kandidat;
+    candidateMap.set(candidate, (candidateMap.get(candidate) || 0) + d.Stimmen);
+  });
+  
+  // Total Stimmen in this bwk.
+  const totalStimmen = Array.from(candidateMap.values()).reduce((sum, val) => sum + val, 0);
+  
+  // Build an array of candidate objects. Here we also join the candidate info.
+  const candidateArray = Array.from(candidateMap, ([candidate, sum]) => {
+    // Use the shortKey function to get the candidate's key.
+    const candInfo = data_kand_map.get(shortKey(candidate)) || {};
+    return {
+      id: candInfo.id,
+      Kandidat: candidate,
+      Stimmen: sum,
+      Anteil: totalStimmen ? (sum / totalStimmen) * 100 : 0,
+      bwk: bwk,
+      partei: candInfo.partei || "",
+      partei_kurz: candInfo.partei_kurz || "",
+      farbe: candInfo.farbe || "#ccc"
+    };
+  });
+  
+  sharesByBwk.set(bwk, candidateArray);
+});
+        console.log(sharesByBwk)
+        // Sortieren nach größtem Anteil
+        barData.sort((a, b) => d3.descending(a.Anteil, b.Anteil));
+
 
 
         // Merge basierend auf den 2 Anfangsbuchstaben
@@ -308,7 +403,21 @@ a {
         });
 
 
-        mapData.forEach(d => {
+        mapDataWK.forEach(d => {
+        const key = shortKey(d.Kandidat);
+        const m = data_kand_map.get(key);
+        if (m) {
+            d.id = m.id;
+            d.partei = m.partei;
+            d.partei_kurz = m.partei_kurz;
+            d.farbe = m.farbe;
+            d.name = m.name;
+        } else {
+            console.warn("Kein Metadatensatz für:", d.Kandidat);
+        }
+        });
+
+        mapDataBWK.forEach(d => {
         const key = shortKey(d.Kandidat);
         const m = data_kand_map.get(key);
         if (m) {
@@ -324,7 +433,7 @@ a {
 
         // Erstelle eine Map: Schlüssel = Wahlkreis-ID (z.B. "01"), Wert = name_kurz
         const wkMap = new Map(
-          data_wk.map(d => [d.id, { kurz: d.name_kurz, voll: d.name }])
+          data_wk.map(d => [d.id, { kurz: d.name_kurz, voll: d.name, bwk: d.bwk }])
         );
 
       // Achsen
@@ -476,7 +585,7 @@ a {
     /////////////////////////
     // --- Kartenansicht ---
     /////////////////////////
-
+    // Wahlkreise
     // Mapping der Wahlkreise zu Gitterkoordinaten:
     const gridMapping = [
       { wk: "01", x: 3, y: 3 },
@@ -509,11 +618,11 @@ a {
     ];
 
 
-    // Gruppiere mapData nach Wahlbezirk:
-    const mapResultsByWk = d3.group(mapData, d => d.Wahlbezirk);
+    // Gruppiere mapDataWK nach Wahlbezirk:
+    const mapResultsByWk = d3.group(mapDataWK, d => d.Wahlbezirk);
 
     // Zeichne für jedes Mapping ein rect-Element:
-    tiles = mapGroup.selectAll("rect")
+    tiles = mapGroupWahlkreis.selectAll("rect")
       .data(gridMapping)
       .enter()
       .append("rect")
@@ -537,7 +646,7 @@ a {
           return "#ccc";
       });
 
-      mapGroup.selectAll("text.tileLabel")
+      mapGroupWahlkreis.selectAll("text.tileLabel")
         .data(gridMapping)
         .enter()
         .append("text")
@@ -576,7 +685,7 @@ a {
           return wk ? wk.kurz : "";
         });
 
-        mapGroup.append("svg:image")
+        mapGroupWahlkreis.append("svg:image")
           .attr('x', 4 * cellSize + tileSize / 2)
           .attr('y', 4  * cellSize + tileSize / 2 + 4)
           .attr('width', 40)
@@ -584,7 +693,7 @@ a {
           .attr('opacity', 0.7)
           .attr("xlink:href", "bilder/click.png");
         
-        mapGroup.append("text")
+          mapGroupWahlkreis.append("text")
           .attr('x', 4 * cellSize + tileSize / 2 + 25)
           .attr('y', 5  * cellSize + tileSize / 2 + 4)
           .attr("text-anchor", "middle")
@@ -592,7 +701,7 @@ a {
           .style('font-size', "10.5px")
           .text("Klicke auf eine Kachel, um das Ergebnis");
         
-        mapGroup.append("text")
+          mapGroupWahlkreis.append("text")
           .attr('x', 4 * cellSize + tileSize / 2 + 25)
           .attr('y', 5  * cellSize + tileSize / 2 + 18)
           .attr("text-anchor", "middle")
@@ -600,7 +709,7 @@ a {
           .attr('fill', "#999")
           .text("für den Wahlbezirk zu sehen.");
         
-        tiles_overlay = mapGroup.selectAll(".tilesOverlay")
+        tiles_overlay = mapGroupWahlkreis.selectAll(".tilesOverlay")
           .data(gridMapping)
           .enter()
           .append("rect")
@@ -783,13 +892,542 @@ a {
                 const wk = wkMap.get(d.wk);
                 return wk ? wk.voll : "";
             })
+
+
+        
+    // Briefwahlkreise
+    // Mapping der Briefwahlkreise zu Gitterkoordinaten:
+    const gridMappingBWK = [
+      { wk: "0", coords: [{x: 3, y: 3},
+      {x: 5, y: 3},
+      {x: 5, y: 4},
+      {x: 4, y: 4},
+      {x: 4, y: 6},
+      {x: 3, y: 6},
+      {x: 3, y: 3}] },
+      { wk: "1", coords: [{x: 2, y: 3},
+      {x: 3, y: 3},
+      {x: 3, y: 4},
+      {x: 2, y: 4},
+      {x: 2, y: 3}] },
+      { wk: "1", coords: [{x: 4, y: 2},
+      {x: 5, y: 2},
+      {x: 5, y: 3},
+      {x: 4, y: 3},
+      {x: 4, y: 2}] },
+      { wk: "1", coords: [{x: 5, y: 3},
+      {x: 7, y: 3},
+      {x: 7, y: 4},
+      {x: 5, y: 4},
+      {x: 5, y: 3}] },
+      { wk: "2", coords: [{x: 4, y: 4},
+      {x: 6, y: 4},
+      {x: 6, y: 5},
+      {x: 5, y: 5},
+      {x: 5, y: 6},
+      {x: 4, y: 6},
+      ] },
+      { wk: "2", coords: [{x: 4, y: 6},
+      {x: 4, y: 7},
+      {x: 3, y: 7},
+      {x: 3, y: 6},
+      {x: 4, y: 6},] },
+      { wk: "3", coords: [{x: 1, y: 3},
+      {x: 2, y: 3},
+      {x: 2, y: 4},
+      {x: 3, y: 4},
+      {x: 3, y: 7},
+      {x: 5, y: 7},
+      {x: 5, y: 8},
+      {x: 4, y: 8},
+      {x: 4, y: 9},
+      {x: 2, y: 9},
+      {x: 2, y: 5},
+      {x: 1, y: 5},
+      {x: 1, y: 3},] },
+      { wk: "3", coords: [{x: 2, y: 2},
+      {x: 4, y: 2},
+      {x: 4, y: 3},
+      {x: 2, y: 3},
+      {x: 2, y: 2}] },
+      { wk: "3", coords: [{x: 4, y: 1},
+      {x: 5, y: 1},
+      {x: 5, y: 2},
+      {x: 4, y: 2},
+      {x: 4, y: 1}] },
+      { wk: "3", coords: [{x: 5, y: 2},
+      {x: 6, y: 2},
+      {x: 6, y: 3},
+      {x: 5, y: 3},
+      {x: 5, y: 2}] },
+      { wk: "3", coords: [{x: 6, y: 4},
+      {x: 7, y: 4},
+      {x: 7, y: 5},
+      {x: 6, y: 5},
+      {x: 6, y: 4}] },
+    ];
+
+    // Gruppiere mapDataWK nach Wahlbezirk:
+    const mapResultsByBWk = d3.group(mapDataBWK, d => d.Wahlbezirk);
+
+    function roundedPath(points, radius = 8) {
+      // Remove duplicate of first point if present at the end
+      if (points.length > 1 &&
+          points[0][0] === points[points.length - 1][0] &&
+          points[0][1] === points[points.length - 1][1]) {
+        points = points.slice(0, -1);
+      }
+      
+      let path = "";
+      const len = points.length;
+      
+      for (let i = 0; i < len; i++) {
+        const prev = points[(i - 1 + len) % len];
+        const curr = points[i];
+        const next = points[(i + 1) % len];
+        
+        // Compute vectors from curr to prev and curr to next
+        const dx1 = curr[0] - prev[0],
+              dy1 = curr[1] - prev[1],
+              dx2 = next[0] - curr[0],
+              dy2 = next[1] - curr[1];
+        
+        const dist1 = Math.hypot(dx1, dy1),
+              dist2 = Math.hypot(dx2, dy2);
+        
+        // Compute internal angle using the dot product
+        // Clamp the value to avoid precision errors
+        const dot = Math.max(-1, Math.min(1, (dx1 * dx2 + dy1 * dy2) / (dist1 * dist2)));
+        const angle = Math.acos(dot); // in radians
+        
+        // If the internal angle is greater than 90° (i.e. > π/2 radians),
+        // then do not round the corner – just draw a straight line to the current point.
+        if (angle > Math.PI / 2) {
+          if (i === 0) {
+            path += `M${curr[0]},${curr[1]}`;
+          } else {
+            path += `L${curr[0]},${curr[1]}`;
+          }
+          continue; // Skip rounding for this vertex
+        }
+        
+        // Otherwise, calculate unit vectors along the incoming and outgoing edges.
+        const ux1 = (dist1 === 0 ? 0 : dx1 / dist1),
+              uy1 = (dist1 === 0 ? 0 : dy1 / dist1),
+              ux2 = (dist2 === 0 ? 0 : dx2 / dist2),
+              uy2 = (dist2 === 0 ? 0 : dy2 / dist2);
+        
+        // Calculate the offset points along each edge from the vertex (curr)
+        const x1 = curr[0] - ux1 * radius,
+              y1 = curr[1] - uy1 * radius,
+              x2 = curr[0] + ux2 * radius,
+              y2 = curr[1] + uy2 * radius;
+        
+        // For the first point, move to the starting point of the arc.
+        if (i === 0) {
+          path += `M${x1},${y1}`;
+        } else {
+          path += `L${x1},${y1}`;
+        }
+        
+        // Determine the sweep flag using the cross product of the two unit vectors.
+        const cross = ux1 * uy2 - uy1 * ux2;
+        const sweepFlag = cross < 0 ? 0 : 1;
+        
+        // Append an arc command to round the corner
+        path += `A${radius},${radius} 0 0 ${sweepFlag} ${x2},${y2}`;
+      }
+      
+      path += "Z";
+      return path;
+    }
+
+    function offsetPolygon(points, offset, scale = 1000) {
+      // Convert our points ([x, y]) into Clipper's format
+      const clipperPoints = points.map(p => ({
+        X: Math.round(p[0] * scale),
+        Y: Math.round(p[1] * scale)
+      }));
+      
+      // Initialize ClipperOffset and add the path
+      const co = new ClipperLib.ClipperOffset();
+      co.AddPath(clipperPoints, ClipperLib.JoinType.jtRound, ClipperLib.EndType.etClosedPolygon);
+      
+      // Execute the offset. Use a negative offset for inward shrinking.
+      const solution = new ClipperLib.Paths();
+      co.Execute(solution, -offset * scale);
+      
+      if (solution.length === 0) return points; // Fallback if offset fails
+      
+      // Assume the first solution is our offset polygon.
+      const offsetPoints = solution[0].map(pt => [pt.X / scale, pt.Y / scale]);
+      return offsetPoints;
+    }
+
+    const defs = svg.append("defs");
+
+function shortKeyBWK(name) {
+  return name.trim().substring(0, 2).toLowerCase();
+}
+
+function createPattern(bwk, candidate, color) {
+  const patternId = `pattern-${bwk}-${shortKeyBWK(candidate)}`;
+  
+  // Check if this pattern is already created
+  if (defs.select(`#${patternId}`).empty()) {
+    if (bwk === "0") {
+      const pattern = defs.append("pattern")
+      .attr("id", patternId)
+      .attr("patternUnits", "userSpaceOnUse")
+      .attr("width", 10)
+      .attr("height", 10);
+
+    // Fill the pattern with the candidate's color.
+    pattern.append("rect")
+      .attr("width", 10)
+      .attr("height", 10)
+      .attr("fill", color);
+
+    // Example: add diagonal white stripes
+    pattern.append("line")
+      .attr("x1", 0)
+      .attr("y1", 0)
+      .attr("x2", 11)
+      .attr("y2", 11)
+      .attr("stroke", "#fdfdd5")
+      .attr("stroke-width", 2);
+    } 
+    else if (bwk === "1") {
+      const pattern03 = defs.append("pattern")
+        .attr("id", patternId)
+        .attr("patternUnits", "userSpaceOnUse")
+        .attr("width", 10)
+        .attr("height", 10);
+
+      // Fill the pattern with the candidate's color.
+      pattern03.append("rect")
+        .attr("width", 10)
+        .attr("height", 10)
+        .attr("fill", color);
+
+      // Example: add diagonal white stripes
+      pattern03.append("rect")
+      .attr("x", 1)
+      .attr("y", 1)
+        .attr("width", 5)
+        .attr("height", 5)
+        .style("fill", "#fdfdd5");
+
+    } 
+    else if (bwk === "2") {
+      const pattern03 = defs.append("pattern")
+        .attr("id", patternId)
+        .attr("patternUnits", "userSpaceOnUse")
+        .attr("width", 10)
+        .attr("height", 10);
+
+      // Fill the pattern with the candidate's color.
+      pattern03.append("rect")
+        .attr("width", 10)
+        .attr("height", 10)
+        .attr("fill", color);
+
+      // Example: add diagonal white stripes
+      pattern03.append("circle")
+        .attr("cx", 5)
+        .attr("cy", 5)
+        .attr("r", 3)
+        .attr("fill", "none")
+        .style("stroke-width", 1)
+        .style("stroke", "#fdfdd5");
+
+    } 
+    else if (bwk === "3") {
+      const pattern03 = defs.append("pattern")
+        .attr("id", patternId)
+        .attr("patternUnits", "userSpaceOnUse")
+        .attr("width", 10)
+        .attr("height", 10);
+
+      // Fill the pattern with the candidate's color.
+      pattern03.append("rect")
+        .attr("width", 10)
+        .attr("height", 10)
+        .attr("fill", color);
+
+      // Example: add diagonal white stripes
+      pattern03.append("circle")
+        .attr("cx", 5)
+        .attr("cy", 5)
+        .attr("r", 2)
+        .style("fill", "#fdfdd5");
+    }
+  }
+  return patternId;
+}
+
+    // Zeichne für jedes Mapping ein rect-Element:
+    tiles = mapGroupBriefwahlkreis.selectAll(".bwkTiles")
+      .data(gridMappingBWK)
+      .enter()
+      .append("path")
+      .attr("class", "pathMap")
+      .attr("d", d => {
+        // Get original coordinates from your mapping
+        let coords = d.coords.map(p => getTileCorner(p.x, p.y));
+        
+        // Optionally remove duplicate closing point if present:
+        if (coords.length > 1 &&
+            coords[0][0] === coords[coords.length - 1][0] &&
+            coords[0][1] === coords[coords.length - 1][1]) {
+          coords = coords.slice(0, -1);
+        }
+        
+        // Shrink the polygon inward by a fixed offset (e.g., 4 pixels)
+        const shrunkCoords = offsetPolygon(coords, 4);
+        
+        // Optionally, apply your roundedPath if you still want rounded corners:
+        return roundedPath(shrunkCoords, 6);
+          })
+      .attr("rx", "5")
+      .style("cursor", "pointer")
+      .attr("fill", d => {
+          // Hole die Ergebnisse für diesen Wahlbezirk
+          const group = sharesByBwk.get(d.wk);
+          
+          if (group && group.length > 0) {
+            // Sortiere die Gruppe absteigend nach Anteil und wähle den höchsten Kandidaten:
+            const bestCandidate = group.sort((a, b) => d3.descending(a.Anteil, b.Anteil))[0];
+            const patternId = createPattern(d.wk, bestCandidate.Kandidat, bestCandidate.farbe);
+      return `url(#${patternId})`;
+          }
+          // Falls keine Daten vorhanden sind, default auf grau:
+          return "#ccc";
+      });
+
+        mapGroupBriefwahlkreis.append("svg:image")
+          .attr('x', 4 * cellSize + tileSize / 2)
+          .attr('y', 4  * cellSize + tileSize / 2 + 4)
+          .attr('width', 40)
+          .attr('height', 44)
+          .attr('opacity', 0.7)
+          .attr("xlink:href", "bilder/click.png");
+        
+          mapGroupBriefwahlkreis.append("text")
+          .attr('x', 4 * cellSize + tileSize / 2 + 25)
+          .attr('y', 5  * cellSize + tileSize / 2 + 4)
+          .attr("text-anchor", "middle")
+          .attr('fill', "#999")
+          .style('font-size', "10.5px")
+          .text("Klicke auf eine Kachel, um das Ergebnis");
+        
+          mapGroupBriefwahlkreis.append("text")
+          .attr('x', 4 * cellSize + tileSize / 2 + 25)
+          .attr('y', 5  * cellSize + tileSize / 2 + 18)
+          .attr("text-anchor", "middle")
+          .style('font-size', "10.5px")
+          .attr('fill', "#999")
+          .text("für den Wahlbezirk zu sehen.");
+
+
+
+        tiles_overlay = mapGroupBriefwahlkreis.selectAll(".tilesOverlayBWK")
+          .data(gridMappingBWK)
+          .enter()
+          .append("path")
+      .attr("class", "pathMap")
+      .attr("d", d => {
+        // Get original coordinates from your mapping
+        let coords = d.coords.map(p => getTileCorner(p.x, p.y));
+        
+        // Optionally remove duplicate closing point if present:
+        if (coords.length > 1 &&
+            coords[0][0] === coords[coords.length - 1][0] &&
+            coords[0][1] === coords[coords.length - 1][1]) {
+          coords = coords.slice(0, -1);
+        }
+        
+        // Shrink the polygon inward by a fixed offset (e.g., 4 pixels)
+        const shrunkCoords = offsetPolygon(coords, 4);
+        
+        // Optionally, apply your roundedPath if you still want rounded corners:
+        return roundedPath(shrunkCoords, 6);
+          })
+      .attr("rx", "5")
+      .style("cursor", "pointer")
+          .attr("opacity", 0)
+          .on("click", function (event, d) {
+            const wkId = d.wk;
+            const wkName = sharesByBwk.get(wkId)?.voll || "Unbekannt";
+            console.log("Hey!")
+            
+            // Filter data for this Wahlbezirk
+            const wkResults = sharesByBwk.get(wkId);
+
+            // Show overlay
+            d3.select("#overlay").style("display", "flex");
+
+            // Clear previous chart
+            d3.select("#overlayChart").html("");
+
+            windowWidth = window.innerWidth > 600 ? 600 : window.innerWidth - 60
+            d3.select("#overlayContent").style("width", `${windowWidth}px`)
+            
+
+            // Create SVG in overlay
+            const svg = d3.select("#overlayChart")
+              .append("svg")
+              .attr("width", windowWidth)
+              .attr("height", 450);
+            
+
+            svg.append("foreignObject")
+              .style("width", "100%")
+              .style("height", "50px")
+              .html(`
+                <div style="display: flex; align-items: center; justify-content: center;">
+                  <div style="font-size: 14px; font-weight: bold;">Briefwahlbezirk ${parseInt(wkId) + 1} ()</div>
+                </div>
+              `);
+
+            const margin = { top: 60, right: 0, bottom: 60, left: 60 };
+            const width = windowWidth - margin.left - margin.right;
+            const height = 450 - margin.top - margin.bottom - 40;
+
+            const chartGroup = svg.append("g")
+              .attr("transform", `translate(${margin.left},${margin.top})`);
+              console.log(wkResults.filter(d => d.id == '1'))
+
+            
+            
+            // Achsen
+            const x = d3.scaleLinear().domain([0, 100]).range([0, width - 30]);
+            const y = d3.scaleBand()
+              .domain(wkResults.map(d => d.Kandidat))
+              .range([0, height])
+              .padding(0.2);
+            
+            // Hilfslinien bei 10%, 20%, ... 90%
+        for (let i = 0; i <= 100; i += 20) {
+          chartGroup.append("line")
+                .attr("class", "wk-grid-line")
+                .attr("x1", x(i))
+                .attr("x2", x(i))
+                .attr("y1", 0)
+                .attr("y2", height)
+                .attr("stroke-dasharray", "2,2")
+                .attr("stroke-width", 1)
+                .attr("stroke", "#ccc")
+
+            // Prozentlabel
+            chartGroup.append("text")
+                .attr("x", x(i))
+                .attr("y", -5)
+                .attr("text-anchor", "middle")
+                .attr("fill", "#999")
+                .attr("font-size", "10px")
+                .text(`${i}%`);
+        }
+            
+            // Balken zeichnen
+            chartGroup.selectAll(".wk-bar")
+                .data(wkResults)
+                .enter()
+                .append("rect")
+                .attr("class", "bar")
+                .attr("y", d => y(d.Kandidat))
+                .attr("height", y.bandwidth())
+                .attr("x", 0)
+                .attr("fill", d => d.farbe)
+                .attr("rx", "5px")
+                .transition()
+                .duration(1000)
+                .delay((d, i) => i * 100) // kleine Staffelung
+                .attr("width", d => x(d.Anteil));
+            
+                
+
+            chartGroup.selectAll(".wk-bar-label")
+              .data(wkResults)
+              .enter()
+              .append("foreignObject")
+              .attr("x", -margin.left)
+              .attr("y", d => y(d.Kandidat) + 1)
+              .attr("width", margin.left - 10)
+              .attr("height", y.bandwidth())
+              .style("opacity", 0)
+              .html(d => `
+                  <div xmlns="http://www.w3.org/1999/xhtml"
+                      class="wk-bar-label"
+                      style="display: flex; align-items: center; gap: 8px; justify-content: end">
+                      <img src="bilder/kandidat_${d.id}.png"
+                          alt="${d.Kandidat}"
+                          style="width: 25px; height: 25px; object-fit: cover; border-radius: 50%; border: 3px solid ${d.farbe}; font-size: 13px; margin-top: 2px;" />
+              </div>
+            `)
+              .transition()
+              .duration(1000)
+              .delay((d, i) => i * 100) // kleine Staffelung
+              .style("opacity", 1);
+
+
+            // Prozentlabel-Gruppe für Text + Hintergrund
+              const anteilLabels = chartGroup.selectAll(".wk-anteil-label-group")
+                  .data(wkResults)
+                  .enter()
+                  .append("g")
+                  .attr("class", "anteil-label-group")
+
+              // Rechteck-Hintergrund (vor Text)
+              anteilLabels.append("rect")
+                  .attr("x", -4)
+                  .attr("y", -10)
+                  .attr("width", 54)
+                  .attr("height", 19)
+                  .attr("fill", "#fdfdd5")
+                  .attr("rx", 3)
+                  .attr("ry", 3)
+                  .style("opacity", 0)
+                  .attr("transform", d => `translate(0, ${y(d.Kandidat) + y.bandwidth() / 2})`)
+                  .transition()
+                  .duration(1000)
+                  .delay((d, i) => i * 100) // kleine Staffelung
+                  .attr("transform", d => `translate(${x(d.Anteil) + 5}, ${y(d.Kandidat) + y.bandwidth() / 2})`)
+                  .style("opacity", 1);
+
+              // Prozent-Text
+              anteilLabels.append("text")
+                  .text(d => `${d.Anteil.toFixed(1)} %`)
+                  .attr("dy", "0.35em")
+                  .attr("x", 0)
+                  .style("font-size", "16px")
+                  .style("font-weight", "bold")
+                  .style("fill", "#333")
+                  .style("opacity", 0)
+                  .attr("transform", d => `translate(0, ${y(d.Kandidat) + y.bandwidth() / 2})`)
+                  .transition()
+                  .duration(1000)
+                  .delay((d, i) => i * 100) // kleine Staffelung
+                  .attr("transform", d => `translate(${x(d.Anteil) + 5}, ${y(d.Kandidat) + y.bandwidth() / 2})`)
+                  .style("opacity", 1); // Zielbreite
+
+                
+              
+                })
+              .style("cursor", "pointer")
+              .append("title") // Tooltip!
+              .text(d => {
+                const wk = wkMap.get(d.wk);
+                return wk ? (parseInt(wk.voll) + 1).toString() : "";
+            })
+        
           
 
     });
 
     function animateMap() {
       // Sortiere die Rects: Zuerst nach y, dann nach x (aufsteigend)
-      mapGroup.selectAll(".rectMap")
+      mapGroupWahlkreis.selectAll(".rectMap")
         .sort((a, b) => (a.y - b.y) || (a.x - b.x))
         // Setze sicherheitshalber nochmals den Anfangszustand
         .transition()
@@ -797,7 +1435,7 @@ a {
         .duration(500)
         .attr("opacity", 1);
         
-      mapGroup.selectAll(".tileLabel")
+        mapGroupWahlkreis.selectAll(".tileLabel")
         .sort((a, b) => (a.y - b.y) || (a.x - b.x))
         // Setze sicherheitshalber nochmals den Anfangszustand
         .transition()
@@ -805,13 +1443,13 @@ a {
         .duration(500)
         .attr("opacity", 1);
 
-      mapGroup.select("#legendGroup")
+        mapGroupWahlkreis.select("#legendGroup")
         .transition()
         .delay(2000)
         .duration(1000)
         .attr("opacity", 1);
 
-      mapGroup.select("#ortsteil_templin")
+        mapGroupWahlkreis.select("#ortsteil_templin")
         .transition()
         .delay(2000)
         .duration(1000)
@@ -821,7 +1459,7 @@ a {
     /////////////
     // Titel Karte
     /////////////
-    const mapTitle = mapGroup.append("foreignObject")
+    const mapTitle = mapGroupWahlkreis.append("foreignObject")
       .attr("id", "mapTitle")
       .attr("y", -47)
       .attr("x", -margin.left + 20)
@@ -875,7 +1513,7 @@ a {
       .y(d => d[1])
       .curve(d3.curveLinear); // Keine Glättung, harte Linien
 
-    mapGroup.append("path")
+    mapGroupWahlkreis.append("path")
       .datum(polygonPoints)
       .attr("id", "ortsteil_templin")
       .attr("d", lineGenerator)
@@ -885,7 +1523,7 @@ a {
       .attr("stroke-dasharray", "4 2")
       .attr("opacity", 0);
 
-    const legendGroup = mapGroup.append("foreignObject")
+    const legendGroup = mapGroupWahlkreis.append("foreignObject")
       .attr("id", "legendGroup")
       .attr("y", 420)
       .style("display", "flex")
@@ -900,6 +1538,53 @@ a {
             <div style="font-size: 12px;">Wahlbezirke Stadtgebiet Templin</div>
           </div>
         `);
+
+
+    ////////
+    // Briefwahlkreis
+    ////////
+          
+
+    /////////////
+    // Titel Karte
+    /////////////
+    const mapTitleBWK = mapGroupBriefwahlkreis.append("foreignObject")
+      .attr("id", "mapTitle")
+      .attr("y", -47)
+      .attr("x", -margin.left + 20)
+      .style("width", `${width}px`)
+      .style("height", "80px")
+        .html(`
+          <div style="display: flex; align-items: center; justify-content: center;width: ${width}px; flex-direction: column">
+            <div style="font-size: 14px; font-weight: bold; margin-bottom: 5px;">Wahlergebnis der Summe aus Wahlbezirk + Briefwahlbezirken</div>
+            <div style="font-size: 10.5px;">Jedes Muster repräsentiert ein Briefwahlbezirk.</div>
+          </div>
+        `);
+
+    mapGroupBriefwahlkreis.append("path")
+      .datum(polygonPoints)
+      .attr("id", "ortsteil_templin_bwk")
+      .attr("d", lineGenerator)
+      .attr("fill", "#f4f0c2")
+      .attr("stroke", "#c4a012")
+      .attr("stroke-width", 2)
+      .attr("stroke-dasharray", "4 2");
+
+    const legendGroupWK = mapGroupBriefwahlkreis.append("foreignObject")
+      .attr("id", "legendGroup_bwk")
+      .attr("y", 420)
+      .style("display", "flex")
+      .style("align-items", "center")
+      .style("justify-content", "center")
+      .style("width", "400px")
+      .style("height", "40px")
+        .html(`
+          <div style="display: flex; align-items: center; justify-content: center;width: 300px;/*! height: 40px; */">
+            <div style="width: 18px; height: 18px; outline: 2px dashed #c4a012;margin: 8px; background-color: #f4f0c2"></div>
+            <div style="font-size: 12px;">Wahlbezirke Stadtgebiet Templin</div>
+          </div>
+        `);
+    
   </script>
 </body>
 </html>

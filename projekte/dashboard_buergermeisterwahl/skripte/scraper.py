@@ -6,13 +6,15 @@ import os
 
 # Basis-URL für Wahlbezirke
 base_url = "https://wahlergebnisse.brandenburg.de/730572572/1/20250406/buergermeisterwahl_gemeinde/ergebnisse_stimmbezirk_00{0}.html"
+base_url_brief = "https://wahlergebnisse.brandenburg.de/730572572/1/20250406/buergermeisterwahl_gemeinde/ergebnisse_briefwahlbezirk_909{0}.html"
 
 # Liste für alle Daten
 all_data = []
 
 # Funktion zum Abrufen der Wahlbezirksdaten
 def get_stimmbezirk_data(stimmbezirk_id):
-    is_gesamt = len(stimmbezirk_id) != 2
+    is_gesamt = len(stimmbezirk_id) > 2
+    is_brief = len(stimmbezirk_id) < 2
 
     data = []
     if is_gesamt:
@@ -22,8 +24,20 @@ def get_stimmbezirk_data(stimmbezirk_id):
         soup = BeautifulSoup(response.content, 'html.parser')
         maincontent = soup.find(id="maincontent")
         divs = maincontent.find_all("div", recursive=False) if maincontent else []
-        third_div = divs[4] if len(divs) >= 3 else None
-        print(third_div)
+        result_div = divs[4] if len(divs) >= 3 else None
+
+    
+    elif is_brief:
+        url = base_url_brief.format(stimmbezirk_id)
+
+        response = requests.get(url)
+        soup = BeautifulSoup(response.content, 'html.parser')
+        maincontent = soup.find(id="maincontent")
+        divs = maincontent.find_all("div", recursive=False) if maincontent else []
+
+        result_div = divs[2] if len(divs) >= 3 else None
+        
+        print(url)
     else:
         url = base_url.format(stimmbezirk_id)
 
@@ -32,9 +46,9 @@ def get_stimmbezirk_data(stimmbezirk_id):
         maincontent = soup.find(id="maincontent")
         divs = maincontent.find_all("div", recursive=False) if maincontent else []
 
-        third_div = divs[2] if len(divs) >= 3 else None
+        result_div = divs[2] if len(divs) >= 3 else None
 
-    if third_div is None:
+    if result_div is None:
         expected_candidates = [
             "Bork, Christian", 
             "Beyer, Gordon", 
@@ -57,7 +71,7 @@ def get_stimmbezirk_data(stimmbezirk_id):
         
         return data
 
-    tbody = third_div.find('tbody')
+    tbody = result_div.find('tbody')
     if not tbody:
         print(f"⚠️ Kein <tbody> gefunden für Wahlbezirk {stimmbezirk_id} – vermutlich noch keine Daten vorhanden.")
         return []  # Leere Liste zurückgeben, wenn noch nichts da ist
@@ -77,6 +91,16 @@ def get_stimmbezirk_data(stimmbezirk_id):
 # Abrufen der Daten für alle Wahlbezirke
 for stimmbezirk_id in range(1, 28):
     formated_id = str(stimmbezirk_id).zfill(2)
+    data = get_stimmbezirk_data(formated_id)
+    all_data.extend(data)
+    
+    # Füge eine Wartezeit von 2 Sekunden zwischen den Requests ein, um eine Sperrung der IP zu vermeiden
+    #time.sleep(2)  # 2 Sekunden warten
+
+
+# Abrufen der Daten für alle Wahlbezirke
+for briefstimmbezirk_id in range(0, 4):
+    formated_id = str(briefstimmbezirk_id)
     data = get_stimmbezirk_data(formated_id)
     all_data.extend(data)
     
